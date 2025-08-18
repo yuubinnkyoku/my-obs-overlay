@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OBS BGM Recognizer - 設定</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: #0f1115; color: #eaeef2; }
+    .container { max-width: 760px; margin: 40px auto; padding: 24px; background: #131722; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.35); }
+    h1 { margin-top: 0; }
+    label { display: block; margin: 14px 0 6px; font-weight: 600; }
+    select, input[type=text] { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #2b3245; background: #0f1320; color: #eaeef2; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+    button { padding: 10px 14px; border: 0; border-radius: 8px; background: #1e66f5; color: white; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #2b3245; }
+    .status { margin-top: 18px; font-size: 0.95rem; opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>OBS BGM Recognizer 設定</h1>
+
+    <label for="device">入力デバイス（キャプチャーボード/マイク）</label>
+    <select id="device"></select>
+
+    <label for="bgmdir">BGMディレクトリのパス（例: D:\\BGM）</label>
+    <div class="row">
+      <input id="bgmdir" type="text" placeholder="D:\\BGM" />
+      <button id="save">保存</button>
+    </div>
+
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    const $ = (q)=>document.querySelector(q);
+    const deviceSel = $('#device');
+    const bgmInput = $('#bgmdir');
+    const status = $('#status');
+
+    async function loadDevices() {
+      const res = await fetch('/api/devices');
+      const data = await res.json();
+      deviceSel.innerHTML = '';
+      (data.devices || []).forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.name;
+        opt.textContent = `${d.name}`;
+        deviceSel.appendChild(opt);
+      });
+    }
+
+    async function loadConfig() {
+      const res = await fetch('/api/config');
+      const cfg = await res.json();
+      if (cfg.device_name) deviceSel.value = cfg.device_name;
+      if (cfg.bgm_dir) bgmInput.value = cfg.bgm_dir;
+    }
+
+    async function save() {
+      const body = { device_name: deviceSel.value || null, bgm_dir: bgmInput.value || null };
+      const res = await fetch('/api/save-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+      status.textContent = data.ok ? '保存しました。' : '保存に失敗しました。';
+      setTimeout(()=>{ status.textContent=''; }, 2500);
+    }
+
+    $('#save').addEventListener('click', save);
+
+    (async function init(){
+      await loadDevices();
+      await loadConfig();
+    })();
+  </script>
+</body>
+</html>

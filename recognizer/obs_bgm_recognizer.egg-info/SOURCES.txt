@@ -1,0 +1,6 @@
+pyproject.toml
+obs_bgm_recognizer.egg-info/PKG-INFO
+obs_bgm_recognizer.egg-info/SOURCES.txt
+obs_bgm_recognizer.egg-info/dependency_links.txt
+obs_bgm_recognizer.egg-info/requires.txt
+obs_bgm_recognizer.egg-info/top_level.txt

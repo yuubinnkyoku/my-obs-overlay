@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: obs-bgm-recognizer
+Version: 0.1.0
+Summary: Local FastAPI backend for OBS overlay: device-config UI, WebSocket track broadcast, and (future) BGM recognition.
+Author: you
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi==0.111.0
+Requires-Dist: uvicorn[standard]==0.30.1
+Requires-Dist: pydantic==2.8.2
+Requires-Dist: pyyaml==6.0.2
+Requires-Dist: sounddevice==0.4.6
+Requires-Dist: numpy==2.0.0
+Requires-Dist: librosa==0.10.2.post1
+Requires-Dist: faiss-cpu==1.8.0
+Provides-Extra: recog
+Requires-Dist: librosa==0.10.2.post1; extra == "recog"
+Requires-Dist: faiss-cpu==1.8.0; extra == "recog"

@@ -1,0 +1,34 @@
+[project]
+name = "obs-bgm-recognizer"
+version = "0.1.0"
+description = "Local FastAPI backend for OBS overlay: device-config UI, WebSocket track broadcast, and (future) BGM recognition."
+authors = [ { name = "you" } ]
+readme = "README.md"
+requires-python = ">=3.10"
+
+# Runtime deps (recognition deps included for future steps)
+dependencies = [
+  "fastapi==0.111.0",
+  "uvicorn[standard]==0.30.1",
+  "pydantic==2.8.2",
+  "pyyaml==6.0.2",
+  "sounddevice==0.4.6",
+  "numpy==2.0.0",
+  "librosa==0.10.2.post1",
+  "faiss-cpu==1.8.0",
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Pure backend utility (no packages yet). If we later add a package, update this.
+py-modules = []
+
+[project.optional-dependencies]
+# If you want lighter runtime without recog libs, you could define an extra and install via `uv sync --extra recog`
+recog = [
+  "librosa==0.10.2.post1",
+  "faiss-cpu==1.8.0",
+]
