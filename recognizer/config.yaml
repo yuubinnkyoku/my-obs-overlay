@@ -1,2 +1,3 @@
 device_name: Microsoft サウンド マッパー - Input
 bgm_dir: assets/bgm
+index_max_duration_sec: 20

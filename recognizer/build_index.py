@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -103,6 +104,7 @@ def main():
     cfg = load_config()
     bgm_dir = cfg.get("bgm_dir")
     sr = int(cfg.get("sample_rate", 48000))
+    max_dur = float(cfg.get("index_max_duration_sec", 60.0))  # analyze up to N seconds per file
     index_path_cfg = cfg.get("index_path", INDEX_DIR / "faiss.index")
     metadata_path_cfg = cfg.get("metadata_path", INDEX_DIR / "metadata.json")
     index_path = Path(index_path_cfg)
@@ -127,16 +129,18 @@ def main():
     if not files:
         raise SystemExit("No audio files found in bgm_dir.")
 
-    print(f"Found {len(files)} audio files. Building features...")
+    print(f"Found {len(files)} audio files. Building features (<= {max_dur:.0f}s per file)...")
 
     feats: List[np.ndarray] = []
     metas: List[Dict[str, str]] = []
 
     csv_meta = parse_metadata(root)
 
+    t0 = time.time()
     for i, f in enumerate(files, 1):
         try:
-            y, _ = librosa.load(str(f), sr=sr, mono=True)
+            # Limit duration to speed up indexing on long tracks
+            y, _ = librosa.load(str(f), sr=sr, mono=True, duration=max_dur)
             v = feature_vector(y, sr)
             feats.append(v)
             abs_path = str(f.resolve())
@@ -150,6 +154,9 @@ def main():
             metas.append(m)
         except Exception as e:
             print(f"[WARN] failed on {f}: {e}")
+        if i % 25 == 0:
+            elapsed = time.time() - t0
+            print(f"  progress: {i}/{len(files)} files processed in {elapsed:.1f}s")
 
     X = np.vstack(feats).astype(np.float32)
 
