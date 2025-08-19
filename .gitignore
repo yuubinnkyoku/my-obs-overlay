@@ -21,3 +21,20 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Audio/media (do not commit copyrighted materials)
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.ogg
+*.aac
+*.opus
+*.webm
+*.part
+
+# Recognizer generated/locals
+recognizer/assets/bgm/
+recognizer/index/
+recognizer/.venv/
+recognizer/obs_bgm_recognizer.egg-info/
