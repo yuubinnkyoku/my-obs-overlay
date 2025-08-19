@@ -10,7 +10,7 @@ Requires-Dist: uvicorn[standard]==0.30.1
 Requires-Dist: pydantic==2.8.2
 Requires-Dist: pyyaml==6.0.2
 Requires-Dist: sounddevice==0.4.6
-Requires-Dist: numpy==2.0.0
+Requires-Dist: numpy==1.26.4
 Requires-Dist: librosa==0.10.2.post1
 Requires-Dist: faiss-cpu==1.8.0
 Requires-Dist: httpx==0.27.0
@@ -18,3 +18,130 @@ Provides-Extra: recog
 Requires-Dist: librosa==0.10.2.post1; extra == "recog"
 Requires-Dist: faiss-cpu==1.8.0; extra == "recog"
 Requires-Dist: httpx==0.27.0; extra == "recog"
+
+# OBS BGM認識ツール（ローカルバックエンド）
+
+このFastAPIバックエンドは、ローカルの設定ページを配信し、認識した楽曲をWebSocket経由でSvelte/OBSオーバーレイにブロードキャストし、ローカルで認識処理を実行します。Pythonの依存関係と実行は`uv`で管理されます。
+
+  - 設定ページ: [http://127.0.0.1:8765/config](http://127.0.0.1:8765/config)
+  - WebSocket（フロントエンドの接続先）: ws://127.0.0.1:8765/
+
+## 前提条件
+
+  - Windows
+  - Python 3.10以上（`uv`で管理）
+  - `uv`がインストール済みであること
+
+## 1\) `uv`で依存関係をセットアップ
+
+```powershell
+uv venv .venv
+uv sync --project recognizer
+```
+
+これにより、`recognizer/pyproject.toml`で宣言されているすべての依存関係（FastAPI, sounddevice, librosa, faiss-cpuなど）がインストールされます。
+
+-----
+
+## 2\) サーバー（設定UI + WS）を起動
+
+```powershell
+uv run --project recognizer recognizer/server.py
+```
+
+  - 設定ページを開きます: [http://127.0.0.1:8765/config](http://127.0.0.1:8765/config)
+      - 入力デバイス（キャプチャーボード / マイク）を選択します。
+      - BGMディレクトリのパス（例: `D:\\BGM` または `assets\\bgm`）を入力して保存します。
+      - 相対パスは「recognizer/ ディレクトリ基準」で解決されます（例: `recognizer/assets/bgm`).
+      - 設定は`recognizer/config.yaml`に保存されます。
+
+-----
+
+## 3\) フィンガープリント/特徴量のインデックスを構築
+
+```powershell
+uv run --project recognizer recognizer/build_index.py
+```
+
+  - 設定されたBGMディレクトリ以下の音声ファイルを検出します。
+  - FAISSインデックスを構築し、メタデータを保存します:
+      - `recognizer/index/faiss.index`
+      - `recognizer/index/metadata.json`
+
+**オプション**: BGMディレクトリに`metadata.csv`を配置することで、曲名、シリーズ名、作曲者情報を上書きできます。
+
+CSVヘッダーの例（UTF-8）:
+
+```csv
+file,title,series,composer
+mk8/coconut_mall.wav,Coconut Mall,Mario Kart,Asuka Hayazaki
+```
+
+`file`はBGMのルートディレクトリからの相対パスです。
+
+-----
+
+## 4\) リアルタイム認識を実行
+
+新しいターミナルを開いて実行します:
+
+```powershell
+uv run --project recognizer recognizer/recognize.py
+```
+
+  - 選択された入力デバイスから音声（WASAPI）をキャプチャします。
+  - `hop`ウィンドウごとに特徴量を抽出し、FAISSインデックスを検索し、閾値を超えた場合にサーバー（`/api/push`）にPOSTします。
+  - サーバーはすべてのWebSocketクライアント（Svelteオーバーレイ）にブロードキャストします。
+
+-----
+
+## 5\) フロントエンド（Svelte/OBSオーバーレイ）
+
+  - フロントエンド（`src/routes/+page.svelte`）は自動的に`ws://127.0.0.1:8765/`に接続します。
+  - `{ title, series, composer, confidence }`というメッセージを受信すると、オーバーレイコンポーネント（`src/lib/MusicDisplay.svelte`）を更新します。
+  - このサイトをOBSのブラウザソースとして追加し、オーバーレイを表示します。
+
+-----
+
+## 認識機能なしでのテスト
+
+手動でテストメッセージを送信して、全体の動作を確認できます:
+
+```powershell
+$body = @{ title="Coconut Mall"; series="Mario Kart"; composer="Asuka Hayazaki"; confidence=0.97 } | ConvertTo-Json -Compress
+Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/push" -Method Post -ContentType "application/json" -Body $body
+```
+
+-----
+
+## 設定項目（`recognizer/config.yaml`）
+
+  - `sample_rate`: サンプルレート（48000）
+  - `channels`: チャンネル数（1=モノラルを推奨）
+  - `window_sec`: 解析ウィンドウの秒数（デフォルト 3.0）
+  - `hop_sec`: 認識処理間のステップ秒数（デフォルト 1.0）
+  - `min_confidence`: コサイン類似度の閾値（0～1）
+  - `announce_cooldown_sec`: N秒以内に同じ曲が再度通知されるのを抑制
+  - `index_path`, `metadata_path`: インデックスファイルの場所
+
+これらの値を調整して、遅延と精度のトレードオフを調整してください。
+
+-----
+
+## トラブルシューティング
+
+  - **`sounddevice`がデバイスを見つけられない場合:**
+      - 設定ページを再度開き、正しいデバイスを選択してください。
+      - デバイスが有効になっており、入力チャンネルがあることを確認してください。
+  - **FAISS/インデックスが見つからない場合:**
+      - BGMディレクトリを保存した後、`build_index.py`を実行してください。
+  - **フロントエンドが更新されない場合:**
+      - サーバー（`server.py`）が実行中であることを確認してください。
+      - 認識スクリプト（`recognize.py`）が実行中であることを確認してください。
+      - ブラウザのコンソールやターミナルのログにエラーがないか確認してください。
+
+-----
+
+## 備考
+
+このMVP（Minimum Viable Product）は、軽量な特徴量+FAISS方式を採用しています。ノイズの多い環境での堅牢性を高めるには、将来的にオーディオフィンガープリント方式（例: `audfprint`）の導入を検討してください。
