@@ -183,6 +183,10 @@ def main() -> None:
             y = ring.read_mono()
             if y.size == 0:
                 continue
+            # Avoid short buffers that trigger STFT n_fft warnings and unstable features
+            # Ensure we have at least 2048 samples (~43ms at 48kHz)
+            if y.size < 2048:
+                continue
             if rms(y) < 1e-3:
                 # too quiet, skip to save CPU
                 continue
@@ -213,7 +217,7 @@ def main() -> None:
             }
             try:
                 # POST to server to broadcast via WS
-                httpx.post("http://127.0.0.1:8765/api/push", json=payload, timeout=2.0)
+                httpx.post("http://127.0.0.1:8765/api/push", json=payload, timeout=5.0)
                 print(f"Announce: {payload}")
                 last_announce = (idx, now)
             except Exception as e:
