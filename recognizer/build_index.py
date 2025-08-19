@@ -103,14 +103,23 @@ def main():
     cfg = load_config()
     bgm_dir = cfg.get("bgm_dir")
     sr = int(cfg.get("sample_rate", 48000))
-    index_path = Path(cfg.get("index_path", INDEX_DIR / "faiss.index"))
-    metadata_path = Path(cfg.get("metadata_path", INDEX_DIR / "metadata.json"))
+    index_path_cfg = cfg.get("index_path", INDEX_DIR / "faiss.index")
+    metadata_path_cfg = cfg.get("metadata_path", INDEX_DIR / "metadata.json")
+    index_path = Path(index_path_cfg)
+    metadata_path = Path(metadata_path_cfg)
 
     if not bgm_dir:
         raise SystemExit("config.yaml: bgm_dir is not set. Open /config and save a directory.")
 
-    bgm_dir = str(bgm_dir)
-    root = Path(bgm_dir)
+    # Resolve paths relative to recognizer/ (APP_DIR)
+    bgm_dir_str = str(bgm_dir)
+    root = Path(bgm_dir_str)
+    if not root.is_absolute():
+        root = (APP_DIR / root).resolve()
+    if not index_path.is_absolute():
+        index_path = (APP_DIR / index_path).resolve()
+    if not metadata_path.is_absolute():
+        metadata_path = (APP_DIR / metadata_path).resolve()
     if not root.exists():
         raise SystemExit(f"BGM directory not found: {root}")
 

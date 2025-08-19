@@ -116,7 +116,7 @@ class RingAudio:
 def main() -> None:
     cfg = load_config()
     device_name = cfg.get("device_name")
-    bgm_dir = cfg.get("bgm_dir")
+    bgm_dir_cfg = cfg.get("bgm_dir")
     sr = int(cfg.get("sample_rate", 48000))
     channels = int(cfg.get("channels", 1))
     window_sec = float(cfg.get("window_sec", 3.0))
@@ -124,8 +124,21 @@ def main() -> None:
     min_conf = float(cfg.get("min_confidence", 0.6))
     cooldown = float(cfg.get("announce_cooldown_sec", 3.0))
 
-    index_path = Path(cfg.get("index_path", APP_DIR / "index/faiss.index"))
-    meta_path = Path(cfg.get("metadata_path", APP_DIR / "index/metadata.json"))
+    index_path_cfg = cfg.get("index_path", APP_DIR / "index/faiss.index")
+    meta_path_cfg = cfg.get("metadata_path", APP_DIR / "index/metadata.json")
+    index_path = Path(index_path_cfg)
+    meta_path = Path(meta_path_cfg)
+
+    # Resolve relative paths against recognizer/ (APP_DIR)
+    if bgm_dir_cfg and not Path(str(bgm_dir_cfg)).is_absolute():
+        bgm_dir = (APP_DIR / str(bgm_dir_cfg)).resolve()
+    else:
+        bgm_dir = Path(str(bgm_dir_cfg)) if bgm_dir_cfg else None
+
+    if not index_path.is_absolute():
+        index_path = (APP_DIR / index_path).resolve()
+    if not meta_path.is_absolute():
+        meta_path = (APP_DIR / meta_path).resolve()
 
     if not index_path.exists() or not meta_path.exists():
         raise SystemExit("Index or metadata not found. Run build_index.py first.")

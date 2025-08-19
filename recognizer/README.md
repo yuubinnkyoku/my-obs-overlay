@@ -30,7 +30,8 @@ uv run --project recognizer recognizer/server.py
 
   - 設定ページを開きます: [http://127.0.0.1:8765/config](http://127.0.0.1:8765/config)
       - 入力デバイス（キャプチャーボード / マイク）を選択します。
-      - BGMディレクトリのパス（例: `D:\\BGM`）を入力して保存します。
+      - BGMディレクトリのパス（例: `D:\\BGM` または `assets\\bgm`）を入力して保存します。
+      - 相対パスは「recognizer/ ディレクトリ基準」で解決されます（例: `recognizer/assets/bgm`).
       - 設定は`recognizer/config.yaml`に保存されます。
 
 -----
