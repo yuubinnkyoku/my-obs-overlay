@@ -230,19 +230,48 @@ def main() -> None:
 
     print(f"Opening {'loopback' if loopback else 'input'} stream on device index {device_idx} (sr={sr}, ch={channels})...")
     if loopback:
+        # Validate host API is WASAPI for the chosen device
+        devices = sd.query_devices()
         try:
-            extra = sd.WasapiSettings(loopback=True)
+            hostapis = sd.query_hostapis()
         except Exception:
-            raise SystemExit("WASAPI loopback is only supported on Windows with WASAPI host API.")
-        stream_ctx = sd.InputStream(
-            device=device_idx,
-            samplerate=sr,
-            channels=channels,
-            dtype="float32",
-            callback=callback,
-            blocksize=0,
-            extra_settings=extra,
-        )
+            hostapis = []
+
+        def hostapi_name(idx: int) -> str:
+            try:
+                return hostapis[idx].get("name", str(idx))
+            except Exception:
+                return str(idx)
+
+        d = devices[device_idx]
+        api = hostapi_name(int(d.get("hostapi", 0)))
+        if api != "Windows WASAPI":
+            raise SystemExit(f"Selected device host API is '{api}', but WASAPI is required for loopback. Pick a '(loopback)' WASAPI output device.")
+
+        # Check WasapiSettings availability
+        WasapiSettings = getattr(sd, "WasapiSettings", None)
+        if WasapiSettings is None:
+            raise SystemExit(
+                "sounddevice.WasapiSettings is not available. Ensure you're on Windows and have sounddevice >= 0.4.6 installed."
+            )
+
+        try:
+            extra = WasapiSettings()
+            if hasattr(extra, "loopback"):
+                setattr(extra, "loopback", True)
+            else:
+                raise SystemExit("This sounddevice build does not expose 'loopback' on WasapiSettings.")
+            stream_ctx = sd.InputStream(
+                device=device_idx,
+                samplerate=sr,
+                channels=channels,
+                dtype="float32",
+                callback=callback,
+                blocksize=0,
+                extra_settings=extra,
+            )
+        except Exception as e:
+            raise SystemExit(f"Failed to open WASAPI loopback stream: {e}")
     else:
         stream_ctx = sd.InputStream(
             device=device_idx,
