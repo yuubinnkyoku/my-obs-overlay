@@ -1,3 +1,2 @@
-device_name: Microsoft サウンド マッパー - Input
+device_name: スピーカー (Realtek(R) Audio) (loopback)
 bgm_dir: assets/bgm
-index_max_duration_sec: 20

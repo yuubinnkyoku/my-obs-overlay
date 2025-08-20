@@ -71,6 +71,55 @@ def find_input_device(name_hint: Optional[str]) -> Optional[int]:
     return None
 
 
+def find_wasapi_loopback_device(name_hint: Optional[str]) -> Optional[int]:
+    """Find a WASAPI output device index by name to use with loopback capture.
+
+    The provided name_hint should be the base device name (without the
+    ' (loopback)' suffix).
+    """
+    devices = sd.query_devices()
+    try:
+        hostapis = sd.query_hostapis()
+    except Exception:
+        hostapis = []
+
+    def hostapi_name(idx: int) -> str:
+        try:
+            return hostapis[idx].get("name", str(idx))
+        except Exception:
+            return str(idx)
+
+    if name_hint:
+        lowered = name_hint.lower()
+        for i, d in enumerate(devices):
+            try:
+                if (
+                    d.get("max_output_channels", 0) > 0
+                    and hostapi_name(int(d.get("hostapi", 0))) == "Windows WASAPI"
+                    and lowered in str(d.get("name", "")).lower()
+                ):
+                    return i
+            except Exception:
+                continue
+    # Fallback: pick system default output (for WASAPI) if available
+    try:
+        default_out = sd.default.device[1]  # (input, output)
+        if isinstance(default_out, int):
+            d = devices[default_out]
+            if hostapi_name(int(d.get("hostapi", 0))) == "Windows WASAPI":
+                return default_out
+    except Exception:
+        pass
+    # Last resort: any WASAPI output device
+    for i, d in enumerate(devices):
+        try:
+            if d.get("max_output_channels", 0) > 0 and hostapi_name(int(d.get("hostapi", 0))) == "Windows WASAPI":
+                return i
+        except Exception:
+            continue
+    return None
+
+
 class RingAudio:
     def __init__(self, sr: int, seconds: float, channels: int = 1) -> None:
         self.sr = sr
@@ -147,9 +196,18 @@ def main() -> None:
     index = faiss.read_index(str(index_path))
     metas = json.loads(meta_path.read_text(encoding="utf-8"))
 
-    device_idx = find_input_device(device_name)
+    # Support normal inputs and WASAPI loopback pseudo-devices
+    loopback = False
+    device_idx: Optional[int]
+    base_name = device_name
+    if device_name and device_name.endswith(" (loopback)"):
+        base_name = device_name[:-10]
+        device_idx = find_wasapi_loopback_device(base_name)
+        loopback = True
+    else:
+        device_idx = find_input_device(device_name)
     if device_idx is None:
-        raise SystemExit("No input device found. Set device_name via /config.")
+        raise SystemExit("No suitable device found. Set device_name via /config.")
 
     ring = RingAudio(sr=sr, seconds=window_sec, channels=channels)
 
@@ -170,8 +228,32 @@ def main() -> None:
             arr = arr.reshape(-1, 1)
         ring.write(arr)
 
-    print(f"Opening input stream on device index {device_idx} (sr={sr}, ch={channels})...")
-    with sd.InputStream(device=device_idx, samplerate=sr, channels=channels, dtype="float32", callback=callback, blocksize=0):
+    print(f"Opening {'loopback' if loopback else 'input'} stream on device index {device_idx} (sr={sr}, ch={channels})...")
+    if loopback:
+        try:
+            extra = sd.WasapiSettings(loopback=True)
+        except Exception:
+            raise SystemExit("WASAPI loopback is only supported on Windows with WASAPI host API.")
+        stream_ctx = sd.InputStream(
+            device=device_idx,
+            samplerate=sr,
+            channels=channels,
+            dtype="float32",
+            callback=callback,
+            blocksize=0,
+            extra_settings=extra,
+        )
+    else:
+        stream_ctx = sd.InputStream(
+            device=device_idx,
+            samplerate=sr,
+            channels=channels,
+            dtype="float32",
+            callback=callback,
+            blocksize=0,
+        )
+
+    with stream_ctx:
         next_t = time.time()
         while True:
             now = time.time()

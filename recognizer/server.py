@@ -45,20 +45,46 @@ def save_config(cfg: AppConfig) -> None:
 @app.get("/api/devices")
 def list_input_devices():
     devices = sd.query_devices()
-    inputs = []
+    # Map hostapi index -> name (e.g., "Windows WASAPI")
+    try:
+        hostapis = sd.query_hostapis()
+    except Exception:
+        hostapis = []
+
+    def hostapi_name(idx: int) -> str:
+        try:
+            return hostapis[idx].get("name", str(idx))
+        except Exception:
+            return str(idx)
+
+    items = []
+    # 1) Real input-capable devices
     for dev in devices:
         try:
             if dev.get("max_input_channels", 0) > 0:
-                # Windows WASAPI names may be long; include index for clarity
-                inputs.append({
+                items.append({
                     "name": dev.get("name"),
-                    "hostapi": dev.get("hostapi"),
+                    "hostapi": hostapi_name(int(dev.get("hostapi", 0))),
                     "max_input_channels": dev.get("max_input_channels", 0),
                     "default_samplerate": dev.get("default_samplerate", None),
+                    "loopback": False,
                 })
         except Exception:
             continue
-    return {"devices": inputs}
+    # 2) Add WASAPI output devices as synthetic loopback inputs
+    for dev in devices:
+        try:
+            if dev.get("max_output_channels", 0) > 0 and hostapi_name(int(dev.get("hostapi", 0))) == "Windows WASAPI":
+                items.append({
+                    "name": f"{dev.get('name')} (loopback)",
+                    "hostapi": hostapi_name(int(dev.get("hostapi", 0))),
+                    "max_input_channels": 0,
+                    "default_samplerate": dev.get("default_samplerate", None),
+                    "loopback": True,
+                })
+        except Exception:
+            continue
+    return {"devices": items}
 
 
 @app.get("/api/config")
